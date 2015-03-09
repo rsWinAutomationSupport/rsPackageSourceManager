@@ -1,0 +1,9 @@
+﻿[ClassVersion("1.1.0"), FriendlyName("rsWebHook")]
+class RS_rsWebHook : OMI_BaseResource
+{
+[Key] string Name;
+[write, Description("Github repository name")] string Repo;
+[write, Description("Webhook PayloadURL")] string PayloadURL;
+[write, ValueMap{"Present", "Absent"},Values{"Present", "Absent"}] string Ensure;
+[write, Description("Logging Enabled")] boolean Logging;
+};
