@@ -1,5 +1,7 @@
 ﻿Function Get-TargetResource {
   param (
+    [parameter(Mandatory = $true)]
+    [string]$Name,
     [string]$modulePath,
     [string]$destination
   )
@@ -12,6 +14,8 @@
 
 Function Test-TargetResource {
   param (
+    [parameter(Mandatory = $true)]
+    [string]$Name,
     [strin]$modulePath,
     [string]$destination
   )
@@ -49,6 +53,8 @@ Function Test-TargetResource {
 
 Function Set-TargetResource {
   param (
+    [parameter(Mandatory = $true)]
+    [string]$Name,
     [strin]$modulePath,
     [string]$destination
   )
