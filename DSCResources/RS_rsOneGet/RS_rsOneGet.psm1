@@ -190,3 +190,5 @@ Function Set-TargetResource {
     }
   }
 }
+
+Export-ModuleMember -Function *-TargetResource
