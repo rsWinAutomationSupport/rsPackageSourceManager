@@ -16,7 +16,7 @@ Function Test-TargetResource {
   param (
     [parameter(Mandatory = $true)]
     [string]$Name,
-    [strin]$modulePath,
+    [string]$modulePath,
     [string]$destination
   )
   
@@ -55,7 +55,7 @@ Function Set-TargetResource {
   param (
     [parameter(Mandatory = $true)]
     [string]$Name,
-    [strin]$modulePath,
+    [string]$modulePath,
     [string]$destination
   )
   
