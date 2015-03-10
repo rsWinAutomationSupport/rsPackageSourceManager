@@ -67,7 +67,7 @@ Function Set-TargetResource {
         if(!(Test-Path -Path $(Join-Path $destination -ChildPath $($moduleName, '.zip' -join ''))) -or !($((Get-FileHash -Path $(Join-Path $destination -ChildPath $($moduleName, '.zip' -join '')) -ErrorAction SilentlyContinue).Hash) -eq $(Get-Content -Path $(Join-Path $destination -ChildPath $($moduleName, '.zip.checksum' -join '')) -ErrorAction SilentlyContinue))) {
           Remove-Item -Path $((Join-Path $destination -ChildPath $module), '*' -join '') -Force
           if($module -ne "PowerShellAccessControl") {
-            Compress-Archive -Path $(Join-Path $modulePath -ChildPath $module) -DestinationPath $((Join-Path $destination -ChildPath $moduleName), '.zip' -join '') -CompressionLevel $compressionLevel -ErrorAction SilentlyContinue
+            Compress-Archive -Path $(Join-Path $modulePath -ChildPath $module) -DestinationPath $((Join-Path $destination -ChildPath $moduleName), '.zip' -join '') -ErrorAction SilentlyContinue
             Set-Content -Path $(Join-Path $destination -ChildPath $($moduleName, '.zip.checksum' -join '')) -Value $((Get-FileHash -Path $(Join-Path $destination -ChildPath $($moduleName, '.zip' -join ''))).Hash)
           }
         }
