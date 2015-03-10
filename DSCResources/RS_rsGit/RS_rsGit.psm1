@@ -17,8 +17,6 @@
       [parameter(Mandatory = $true)]
       [string]
       $Name,
-      [string]
-      $DestinationZip,
       [bool]
       $Logging
    )
@@ -121,8 +119,6 @@ function Test-TargetResource
       [parameter(Mandatory = $true)]
       [string]
       $Name,
-      [string]
-      $DestinationZip,
       [bool]
       $Logging
    )
