@@ -7,7 +7,7 @@
   )
   
   @{
-     'path' = $modulePath
+     'modulePath' = $modulePath
      'destination' = $destination
      'Name' = $Name
   }
