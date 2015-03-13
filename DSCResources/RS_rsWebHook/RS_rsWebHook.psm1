@@ -72,7 +72,6 @@ Function Set-TargetResource {
    )
    Import-Module rsCommon
    $d = Get-Content 'C:\DevOps\secrets.json' | ConvertFrom-Json
-   . "$("C:\DevOps", $d.mR, "PullServerInfo.ps1" -join '\')"
    try {
       $currentHooks = Invoke-rsRestMethod -Uri $("https://api.github.com/repos", $($d.git_username), $Repo, "hooks" -join '/') -Headers @{"Authorization" = "token $($d.git_Oauthtoken)"} -ContentType application/json -Method Get
    }
