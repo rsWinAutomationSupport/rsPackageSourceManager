@@ -6,9 +6,10 @@
     [string]$destination
   )
   
-  return @{
-    'path' = $modulePath
-    'destination' = $destination
+  @{
+     'path' = $modulePath
+     'destination' = $destination
+     'Name' = $Name
   }
 }
 
