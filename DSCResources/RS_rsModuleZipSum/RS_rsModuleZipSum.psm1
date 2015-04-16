@@ -69,12 +69,12 @@ Function Set-TargetResource {
           Remove-Item -Path $((Join-Path $destination -ChildPath $module), '*' -join '') -Force
           if($module -ne "PowerShellAccessControl") {
             Compress-Archive -Path $(Join-Path $modulePath -ChildPath $module) -DestinationPath $((Join-Path $destination -ChildPath $moduleName), '.zip' -join '') -ErrorAction SilentlyContinue
-            Set-Content -Path $(Join-Path $destination -ChildPath $($moduleName, '.zip.checksum' -join '')) -Value $((Get-FileHash -Path $(Join-Path $destination -ChildPath $($moduleName, '.zip' -join ''))).Hash)
           }
         }
       }
     }
   }
+  New-DSCCheckSum -ConfigurationPath 'C:\Program Files\WindowsPowerShell\DscService\Modules' -Force
 }
 
 Export-ModuleMember -Function *-TargetResource
