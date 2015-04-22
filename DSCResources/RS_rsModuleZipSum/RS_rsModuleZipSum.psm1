@@ -26,7 +26,7 @@ Function Test-TargetResource {
   if($modules) {
     foreach($module in $modules) {
       if(Test-Path -Path $((Join-Path $modulePath -ChildPath $module), '\', $($module, '.psd1' -join '') -join '')) {
-        $moduleName = $($module, '_', $(((Get-Content -Path $((Join-Path $modulePath -ChildPath $module), $($module, ".psd1" -join '') -join '\')) -match "ModuleVersion") -replace 'ModuleVersion', '' -replace ' ', '' -replace '=', '' -replace "'", '') -join '')
+        $moduleName = $($module, '_', $(((Get-Content -Path $((Join-Path $modulePath -ChildPath $module), $($module, ".psd1" -join '') -join '\')) -match "ModuleVersion") -replace 'ModuleVersion', '' -replace ' ', '' -replace '=', '' -replace "'", '' -replace '"', '') -join '')
 
         if(Test-Path -Path $(Join-Path $destination -ChildPath $($moduleName, '.zip' -join ''))) {
           if($((Get-FileHash -Path $(Join-Path $destination -ChildPath $($moduleName, '.zip' -join '')) -ErrorAction SilentlyContinue).Hash) -eq $(Get-Content -Path $(Join-Path $destination -ChildPath $($moduleName, '.zip.checksum' -join '')) -ErrorAction SilentlyContinue)) {
