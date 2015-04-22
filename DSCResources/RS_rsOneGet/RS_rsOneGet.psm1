@@ -179,7 +179,7 @@ Function Set-TargetResource {
   if($Ensure -eq "Absent") {
     if(Get-Package -Name $Name -ErrorAction SilentlyContinue) {
       try {
-        Uninstall-Package -Name $Name -Force -ErrorAction SilentlyContinue
+        Uninstall-Package -Name $Name -Force
       }
       catch {
         Write-Verbose "failed to uninstall $Name $($_.Exception.Message)"
@@ -189,7 +189,7 @@ Function Set-TargetResource {
   else {
     $PSBoundParameters.Remove('Ensure')
     try {
-      Install-Package @PSBoundParameters -Force -ErrorAction SilentlyContinue
+      Install-Package @PSBoundParameters -Force
     }
     catch {
       Write-Verbose "failed to install $Name $($_.Exception.Message)"
