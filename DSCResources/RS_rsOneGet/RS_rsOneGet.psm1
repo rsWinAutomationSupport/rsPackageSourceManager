@@ -182,7 +182,7 @@ Function Set-TargetResource {
     foreach($myParam in ($PSBoundParameters.Keys -notmatch 'Ensure')) {
       $myParams += @{$myParam = $PSBoundParameters.$myParam }
     }
-    Install-Package @myParams
+    Install-Package @myParams -Force -ErrorAction SilentlyContinue
     if($Ensure -eq "Absent") {
       if($packageInfo) {
         Uninstall-Package -Name $Name -Force -ErrorAction SilentlyContinue
