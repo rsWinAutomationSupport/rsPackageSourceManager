@@ -180,7 +180,7 @@ Function Set-TargetResource {
   if($Ensure -eq "Present") {
     $myParams = @{}
     foreach($myParam in ($PSBoundParameters.Keys -notmatch 'Ensure')) {
-      $myParams += @{$myParam = $PSBoundParameters.$myParam }
+      $myParams.Add($myParam, $PSBoundParameters.$myParam)
     }
     Install-Package @myParams -Force -ErrorAction SilentlyContinue
     if($Ensure -eq "Absent") {
