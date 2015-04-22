@@ -178,11 +178,11 @@ Function Set-TargetResource {
   
   $packageInfo = Get-Package -Name $Name -ErrorAction SilentlyContinue
   if($Ensure -eq "Present") {
+    $myParams = @{}
     foreach($myParam in ($PSBoundParameters.Keys -notmatch 'Ensure')) {
-      $myCommand += $myParam = $((("-", $myParam -join ''), $PSBoundParameters.$myParam -join ' '), -join ' ')
+      $myParams += @{$myParam = $PSBoundParameters.$myParam }
     }
-    $myCommand = $("Install-Package " + $myCommand + "-Force -ErrorAction SilentlyContinue")
-    Invoke-Expression $myCommand
+    Install-Package @myParams
     if($Ensure -eq "Absent") {
       if($packageInfo) {
         Uninstall-Package -Name $Name -Force -ErrorAction SilentlyContinue
