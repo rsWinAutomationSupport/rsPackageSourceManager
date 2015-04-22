@@ -171,22 +171,28 @@ Function Set-TargetResource {
     [string]$RequiredVersion,
     [string]$MinimumVersion,
     [string]$MaximumVersion,
-    [string]$Ensure,
+    [string][Parameter(Mandatory)][ValidateSet('Present','Absent')]$Ensure,
     [string]$ProviderName,
     [string]$Source
   )
   
-  $packageInfo = Get-Package -Name $Name -ErrorAction SilentlyContinue
-  if($Ensure -eq "Present") {
-    $myParams = @{}
-    foreach($myParam in ($PSBoundParameters.Keys -notmatch 'Ensure')) {
-      $myParams.Add($myParam, $PSBoundParameters.$myParam)
-    }
-    Install-Package @myParams -Force -ErrorAction SilentlyContinue
-    if($Ensure -eq "Absent") {
-      if($packageInfo) {
+  if($Ensure -eq "Absent") {
+    if(Get-Package -Name $Name -ErrorAction SilentlyContinue) {
+      try {
         Uninstall-Package -Name $Name -Force -ErrorAction SilentlyContinue
       }
+      catch {
+        Write-Verbose "failed to uninstall $Name $($_.Exception.Message)"
+      }
+    }
+  }
+  else {
+    $PSBoundParameters.Remove('Ensure')
+    try {
+      Install-Package @PSBoundParameters -Force -ErrorAction SilentlyContinue
+    }
+    catch {
+      Write-Verbose "failed to install $Name $($_.Exception.Message)"
     }
   }
 }
