@@ -1,19 +1,27 @@
 ﻿function ExecGit
 {
 	param(
-		[Parameter(Mandatory = $true)][string]$args
+		[string]$GitPath,
+        [Parameter(Mandatory = $true)][string]$args
 	)
 
-    # Conifugraiton and DSC resource-wide variables
-    . ($MyInvocation.PSScriptRoot + "\RS_rsGit_settings.ps1")
-    $gitCmd = $global:gitExe
-    #$gitCmd = "C:\Program Files (x86)\Git\cmd\git.exe"
+    if (-not $GitPath)
+    {
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine")
+        $GitPath = (Get-Command git.exe -ErrorAction SilentlyContinue).Path
+    }
+
+    if (-not (Test-Path $GitPath))
+    {
+        Throw "Git executable not found at $GitPath"
+    }
+
     $location = Get-Location
 
     try
     {
         #Check if location specified for git executable is valid
-	    if ((Get-Command $gitCmd).Name -eq "git.exe")
+	    if ((Get-Command $GitPath).Name -eq "git.exe")
 	    {
 	    	# Write-Verbose "Executing: git $args in $($location.path)"
 	        # Capture git output
@@ -22,7 +30,7 @@
 	        $psi.UseShellExecute = $false 
 	        $psi.RedirectStandardOutput = $true 
 	        $psi.RedirectStandardError = $true 
-	        $psi.FileName = $gitCmd
+	        $psi.FileName = $GitPath
             $psi.WorkingDirectory = $location.ToString()
 	        $psi.Arguments = $args
 	        $process = New-Object System.Diagnostics.Process 
@@ -35,13 +43,13 @@
 	    }
 	    else
 	    {
-            Write-EventLog -LogName DevOps -Source $myLogSource -EntryType Error -EventId 1000 -Message ("Git executable not found at $gitCmd")
-            Throw "Git executable not found at $gitCmd"
+            Write-Verbose "Git executable not found at $GitPath"
+            Throw "Git executable not found at $GitPath"
 	    }
     }
     catch
     {
-        Write-EventLog -LogName DevOps -Source $myLogSource -EntryType Error -EventId 1000 -Message ("Git client execution failed with the following error:`n $($Error[0].Exception)")
+        Write-Verbose "Git client execution failed with the following error:`n $($Error[0].Exception)"
         return $($Error[0].Exception)
     }
 }
@@ -70,13 +78,14 @@ function SetRepoPath
 function IsValidRepo
 {
     param(
-		[Parameter(Position=0,Mandatory = $true)][string]$RepoPath
+		[Parameter(Position=0,Mandatory = $true)][string]$RepoPath,
+        [string]$GitPath
 	)
 
     if (Test-Path $RepoPath)
     {
         Set-Location $RepoPath
-        $output = (ExecGit -args "status")
+        $output = (ExecGit -GitPath $GitPath -args "status")
         if ($output -notcontains "Not a git repository")
         {
             return $true
@@ -97,29 +106,30 @@ function RepoState
     [CmdletBinding()]
     param (
         [string]$RepoPath,
-        [string]$Branch
+        [string]$Branch,
+        [string]$GitPath
     )
     
-    if (-not (IsValidRepo -RepoPath $RepoPath))
+    if (-not (IsValidRepo -GitPath $GitPath -RepoPath $RepoPath))
     {
         Throw "Invalid repo path passed to 'RepoState' function."
     }
 
-    ExecGit "fetch"
+    ExecGit -GitPath $GitPath "fetch"
 
     # Retrieve current repo origin fetch settings
     # Split output by line; find one that is listed as (fetch); split by space and list just origin URI
-    $Source = (((ExecGit -args "remote -v").Split("`n") | Where-Object { $_.contains("(fetch)") }) -split "\s+")[1]
+    $Source = (((ExecGit -GitPath $GitPath -args "remote -v").Split("`n") | Where-Object { $_.contains("(fetch)") }) -split "\s+")[1]
 
     # Retreive current branch or tag and clean-up git output
-    $currentBranch = (ExecGit "symbolic-ref --short -q HEAD").trim()
-    $currentCommit = (ExecGit "rev-parse HEAD").Trim()
+    $currentBranch = (ExecGit -GitPath $GitPath "symbolic-ref --short -q HEAD").trim()
+    $currentCommit = (ExecGit -GitPath $GitPath "rev-parse HEAD").Trim()
 
     # Check if branch is empty, which means that the repository is in detached state
     if ([string]::IsNullOrEmpty($currentBranch))
     {
         # Find any tags that point ot same commit
-        $currentBranch = (ExecGit "show-ref --tags -d") -split "`n" | Where-Object { $_.Contains($currentCommit)} | ForEach-Object { $_.Split()[-1].trimEnd("^{}").split("/")[-1]}
+        $currentBranch = (ExecGit -GitPath $GitPath "show-ref --tags -d") -split "`n" | Where-Object { $_.Contains($currentCommit)} | ForEach-Object { $_.Split()[-1].trimEnd("^{}").split("/")[-1]}
 
         if ([string]::IsNullOrEmpty($currentBranch))
         {
@@ -129,7 +139,7 @@ function RepoState
         }
         else
         {
-            # Select just the tag name and strip the '^{}' characters form the end if present
+            # Select just the tag name and strip the '^{}' characters from the end if present
             $currentBranch = $currentBranch.Split() | Where-Object { $_  -eq $Branch }
             Write-Verbose "Found matching tag for current commit: $currentBranch"
             $IsTagged = $true
@@ -175,7 +185,9 @@ function Get-TargetResource
        [string]
        $DestinationZip,
        [bool]
-       $Logging
+       $Logging,
+       [string]
+       $GitPath
     )
     
     try
@@ -191,12 +203,12 @@ function Get-TargetResource
 
     if (Test-Path $RepoPath)
     {
-        if (IsValidRepo -RepoPath $RepoPath)
+        if (IsValidRepo -RepoPath $RepoPath -GitPath $GitPath)
         {
             Set-Location $RepoPath
             $ensureResult = "Present"
             
-            $RepoState = RepoState -RepoPath $RepoPath -Branch $Branch
+            $RepoState = RepoState -RepoPath $RepoPath -Branch $Branc -GitPath $GitPath
 
             $currentBranch = $RepoState.Branch
             $SourceResult = $RepoState.Source
@@ -278,7 +290,9 @@ function Set-TargetResource
         [string]
         $DestinationZip,
         [bool]
-        $Logging
+        $Logging,
+        [string]
+        $GitPath
     )
     try
     {
@@ -291,10 +305,10 @@ function Set-TargetResource
     
     if ($Ensure -eq "Present")
     {        
-        $GetResult = (Get-TargetResource -Ensure $Ensure -Source $Source -Destination $Destination -Branch $Branch -Name $Name)
+        $GetResult = (Get-TargetResource -Ensure $Ensure -Source $Source -Destination $Destination -Branch $Branch -Name $Name -GitPath $GitPath )
         
         # Retrieve any changes, which have not been merged locally
-        $Fetch = ExecGit "fetch origin"
+        $Fetch = ExecGit -GitPath $GitPath "fetch origin"
 
         # Check repository is already configured as per desired configuration
         if (($GetResult.Ensure -ne "Present") -or 
@@ -312,7 +326,7 @@ function Set-TargetResource
                 Remove-Item -Path $RepoPath -Recurse -Force
             }
 
-            $GitOutput = (ExecGit "clone --branch $branch $Source")
+            $GitOutput = (ExecGit -GitPath $GitPath "clone --branch $branch $Source")
             if($Logging) 
             {
                 Write-EventLog -LogName DevOps -Source $myLogSource -EntryType Information -EventId 1000 -Message ("Repo: $Name`ngit clone --branch $branch $Source `n$GitOutput") 
@@ -321,13 +335,13 @@ function Set-TargetResource
         }
         else
         {
-            $RepoState = RepoState -RepoPath $RepoPath -Branch $Branch
+            $RepoState = RepoState -RepoPath $RepoPath -Branch $Branch -GitPath $GitPath
             Set-Location $RepoPath
             # Verify that we are using the correct branch and force-set the correct one - this will destroy any uncommited changes!
             if ($GetResult.Branch -ne $Branch)
             {
                 Write-Verbose "Local branch is not valid - setting to `"$Branch`""
-                $GitOutput = (ExecGit "checkout --force $Branch")
+                $GitOutput = (ExecGit -GitPath $GitPath "checkout --force $Branch")
                 if($Logging) 
                 {
                     Write-EventLog -LogName DevOps -Source $myLogSource -EntryType Information -EventId 1000 -Message ("Repo: $Name`nLocal branch is not valid - setting to `"$Branch`" `ngit checkout --force $Branch `n$GitOutput") 
@@ -335,18 +349,18 @@ function Set-TargetResource
                 Write-Verbose "`ngit checkout --force $Branch `n$GitOutput"
             }
 
-            $RepoStatus = ExecGit "status"
+            $RepoStatus = ExecGit -GitPath $GitPath "status"
 
             if ($Mode -eq "Clone")
             {
-                $RepoState = RepoState -RepoPath $RepoPath -Branch $Branch -Verbose:$false
+                $RepoState = RepoState -RepoPath $RepoPath -Branch $Branch -Verbose:$false -GitPath $GitPath
                 if ($RepoState.IsTagged)
                 {
                     # Handling 'refs/tags/v1' and 'refs/tags/v1^{}' tag references returned by 'git ls-remote origin $branch' when using tagged commits
-                    if (-not ((ExecGit "ls-remote origin $branch*").Trim()).Contains($RepoState.CurrentCommit))
+                    if (-not ((ExecGit -GitPath $GitPath "ls-remote origin $branch*").Trim()).Contains($RepoState.CurrentCommit))
                     {
-                        $GitOutput = (ExecGit "checkout --force $Branch")
-                        $RepoStatus = ExecGit "status"
+                        $GitOutput = (ExecGit -GitPath $GitPath "checkout --force $Branch")
+                        $RepoStatus = ExecGit -GitPath $GitPath "status"
                         Write-Verbose "Could not find matching tagged commit on origin. Resetting to specified tag. `n $GitOutput `n $RepoStatus"
                     }
                     else
@@ -356,12 +370,12 @@ function Set-TargetResource
                 }
                 else
                 {
-                    $originCommit = (ExecGit "rev-parse origin/$Branch").Trim()
+                    $originCommit = (ExecGit -GitPath $GitPath "rev-parse origin/$Branch").Trim()
                     if (-not ($RepoState.CurrentCommit -eq $originCommit))
                     {
                         # Reset local repo to match origin for all tracked files
-                        $GitOutput = ExecGit "reset --hard origin/$branch"
-                        $RepoStatus = ExecGit "status"
+                        $GitOutput = ExecGit -GitPath $GitPath "reset --hard origin/$branch"
+                        $RepoStatus = ExecGit -GitPath $GitPath "status"
                         Write-Verbose "Current local and origin commits do not match, performing a hard reset. `n $GitOutput `n $RepoStatus"
                         if($Logging -eq $true) 
                         {
@@ -384,8 +398,8 @@ function Set-TargetResource
                         ($RepoStatus.Contains("Changes to be committed")))
                     {
                         # Reset local repo to match origin for all tracked files
-                        $GitOutput = ExecGit "reset --hard origin/$branch"
-                        $RepoStatus = ExecGit "status"
+                        $GitOutput = ExecGit -GitPath $GitPath "reset --hard origin/$branch"
+                        $RepoStatus = ExecGit -GitPath $GitPath "status"
 
                         if($Logging) 
                         {
@@ -398,8 +412,8 @@ function Set-TargetResource
                     if (-not ($RepoStatus.Contains("working directory clean")))
                     {
                         # Remove any untracked files (-f [force], directories (-d) and any ignored files (-x)
-                        $GitOutput = ExecGit "clean -xdf"
-                        $RepoStatus = ExecGit "status"
+                        $GitOutput = ExecGit -GitPath $GitPath "clean -xdf"
+                        $RepoStatus = ExecGit -GitPath $GitPath "status"
 
                         if($Logging) 
                         {
@@ -499,7 +513,9 @@ function Test-TargetResource
         [string]
         $DestinationZip,
         [bool]
-        $Logging
+        $Logging,
+        [string]
+        $GitPath
     )
 
     try
@@ -509,9 +525,9 @@ function Test-TargetResource
     }
     catch {}
 
-    $RepoPath = (SetRepoPath -Source $Source -Destination $Destination)
+    $RepoPath = (SetRepoPath -Source $Source -Destination $Destination -GitPath $GitPath)
 
-    $GetResult = (Get-TargetResource -Ensure $Ensure -Source $Source -Destination $Destination -Branch $Branch -Name $Name)
+    $GetResult = (Get-TargetResource -Ensure $Ensure -Source $Source -Destination $Destination -Branch $Branch -Name $Name -GitPath $GitPath)
 
     if ($Ensure -eq "Present")
     {
@@ -523,7 +539,7 @@ function Test-TargetResource
                 if ($Mode -eq "Clone")
                 {
                     # Check if origin contains changes which have not been merged locally
-                    $Fetch = ExecGit "fetch origin"
+                    $Fetch = ExecGit -GitPath $GitPath "fetch origin"
                     if ( -not [string]::IsNullOrEmpty($Fetch))
                     {
                         Write-Verbose "origin/$Branch has pending updates:`n$Fetch"
@@ -534,12 +550,12 @@ function Test-TargetResource
                         return $false
                     }
 
-                    $RepoState = RepoState -RepoPath $RepoPath -Branch $Branch -Verbose:$false
+                    $RepoState = RepoState -RepoPath $RepoPath -Branch $Branch -Verbose:$false -GitPath $GitPath
 
                     if ($RepoState.IsTagged)
                     {
                         # Handling 'refs/tags/v1' and 'refs/tags/v1^{}' tag references returned by 'git ls-remote origin $branch' when using tagged commits
-                        if (((ExecGit "ls-remote origin $branch*").Trim()).Contains($RepoState.CurrentCommit))
+                        if (((ExecGit -GitPath $GitPath "ls-remote origin $branch*").Trim()).Contains($RepoState.CurrentCommit))
                         {
                             $originCommit = $RepoState.CurrentCommit
                             Write-Verbose "Found matching remote tagged commit"
@@ -552,7 +568,7 @@ function Test-TargetResource
                     }
                     else
                     {
-                        $originCommit = (ExecGit "rev-parse origin/$Branch").Trim()
+                        $originCommit = (ExecGit -GitPath $GitPath "rev-parse origin/$Branch").Trim()
                     }
 
                     if (-not ($RepoState.CurrentCommit -eq $originCommit))
@@ -569,7 +585,7 @@ function Test-TargetResource
                     
                     # Check for local repo status for local uncommited changes
                     # TODO: for push mode we will need tests for local commits, which have not been pushed yet
-                    $RepoStatus = ExecGit "status"
+                    $RepoStatus = ExecGit -GitPath $GitPath "status"
                     if (-not ($RepoStatus.Contains("working directory clean")))
                     {
                         Write-Verbose "Local repo contains uncommited changes! `n$RepoStatus"
