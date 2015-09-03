@@ -121,11 +121,11 @@ function RepoState
     # Split output by line; find one that is listed as (fetch); split by space and list just origin URI
     $Source = (((ExecGit -GitPath $GitPath -args "remote -v").Split("`n") | Where-Object { $_.contains("(fetch)") }) -split "\s+")[1]
 
-    # Retreive current branch or tag and clean-up git output
+    # Try to retreive current branch - will be null if tagged!
     $currentBranch = (ExecGit -GitPath $GitPath "symbolic-ref --short -q HEAD").trim()
     $currentCommit = (ExecGit -GitPath $GitPath "rev-parse HEAD").Trim()
 
-    # Check if branch is empty, which means that the repository is in detached state
+    # Check if branch value  is empty, which means that the repository is in detached state
     if ([string]::IsNullOrEmpty($currentBranch))
     {
         # Find any tags that point ot same commit
@@ -208,7 +208,7 @@ function Get-TargetResource
             Set-Location $RepoPath
             $ensureResult = "Present"
             
-            $RepoState = RepoState -RepoPath $RepoPath -Branch $Branc -GitPath $GitPath
+            $RepoState = RepoState -RepoPath $RepoPath -Branch $Branch -GitPath $GitPath
 
             $currentBranch = $RepoState.Branch
             $SourceResult = $RepoState.Source
@@ -306,7 +306,7 @@ function Set-TargetResource
     if ($Ensure -eq "Present")
     {        
         $GetResult = (Get-TargetResource -Ensure $Ensure -Source $Source -Destination $Destination -Branch $Branch -Name $Name -GitPath $GitPath )
-        
+
         # Retrieve any changes, which have not been merged locally
         $Fetch = ExecGit -GitPath $GitPath "fetch origin"
 
@@ -363,14 +363,22 @@ function Set-TargetResource
                         $RepoStatus = ExecGit -GitPath $GitPath "status"
                         Write-Verbose "Could not find matching tagged commit on origin. Resetting to specified tag. `n $GitOutput `n $RepoStatus"
                     }
-                    else
+                    if (-not ($RepoStatus.Contains("working directory clean")))
                     {
-                        Write-Verbose "Tagged commits match, no further action needed..."
+                        # Remove any untracked files (-f [force], directories (-d)
+                        $GitOutput = ExecGit -GitPath $GitPath "clean -df"
+                        $RepoStatus = ExecGit -GitPath $GitPath "status"
+
+                        if($Logging) 
+                        {
+                            Write-EventLog -LogName DevOps -Source $myLogSource -EntryType Information -EventId 1000 -Message ("Repo: $Name`nLocal repo contains uncommited changes! `n$RepoStatus `n git clean -xdf `n $GitOutput") 
+                        }
+                        Write-Verbose "Local repo contains uncommited changes! `n$RepoStatus `n git clean -df `n $GitOutput"
                     }
                 }
                 else
                 {
-                    $originCommit = (ExecGit -GitPath $GitPath "rev-parse origin/$Branch").Trim()
+                    $originCommit = (ExecGit -GitPath $GitPath "rev-parse origin/$branch").Trim()
                     if (-not ($RepoState.CurrentCommit -eq $originCommit))
                     {
                         # Reset local repo to match origin for all tracked files
@@ -411,15 +419,15 @@ function Set-TargetResource
 
                     if (-not ($RepoStatus.Contains("working directory clean")))
                     {
-                        # Remove any untracked files (-f [force], directories (-d) and any ignored files (-x)
-                        $GitOutput = ExecGit -GitPath $GitPath "clean -xdf"
+                        # Remove any untracked files (-f [force], directories (-d)
+                        $GitOutput = ExecGit -GitPath $GitPath "clean -df"
                         $RepoStatus = ExecGit -GitPath $GitPath "status"
 
                         if($Logging) 
                         {
                             Write-EventLog -LogName DevOps -Source $myLogSource -EntryType Information -EventId 1000 -Message ("Repo: $Name`nLocal repo contains uncommited changes! `n$RepoStatus `n git clean -xdf `n $GitOutput") 
                         }
-                        Write-Verbose "Local repo contains uncommited changes! `n$RepoStatus `n git clean -xdf `n $GitOutput"
+                        Write-Verbose "Local repo contains uncommited changes! `n$RepoStatus `n git clean -df `n $GitOutput"
                     }
                 }
             }
@@ -525,7 +533,7 @@ function Test-TargetResource
     }
     catch {}
 
-    $RepoPath = (SetRepoPath -Source $Source -Destination $Destination -GitPath $GitPath)
+    $RepoPath = (SetRepoPath -Source $Source -Destination $Destination)
 
     $GetResult = (Get-TargetResource -Ensure $Ensure -Source $Source -Destination $Destination -Branch $Branch -Name $Name -GitPath $GitPath)
 
