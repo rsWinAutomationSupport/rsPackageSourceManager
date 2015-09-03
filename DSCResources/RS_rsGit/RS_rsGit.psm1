@@ -2,28 +2,30 @@
 {
     [OutputType([Hashtable])]
     param (
-       [ValidateSet('Present','Absent')]
-       [string]
-       $Ensure = 'Present',
-       [ValidateSet('Clone','CopyOnly')]
-       [string]
-       $Mode = 'Clone',
-       [parameter(Mandatory = $true)]
-       [string]
-       $Source,
-       [parameter(Mandatory = $true)]
-       [string]
-       $Destination,
-       [parameter(Mandatory = $true)]
-       [string]
-       $Branch,
-       [parameter(Mandatory = $true)]
-       [string]
-       $Name,
-       [string]
-       $DestinationZip,
-       [bool]
-       $Logging
+        [ValidateSet('Present','Absent')]
+        [string]
+        $Ensure = 'Present',
+        [ValidateSet('Clone','CopyOnly')]
+        [string]
+        $Mode = 'Clone',
+        [parameter(Mandatory = $true)]
+        [string]
+        $Source,
+        [parameter(Mandatory = $true)]
+        [string]
+        $Destination,
+        [parameter(Mandatory = $true)]
+        [string]
+        $Branch,
+        [parameter(Mandatory = $true)]
+        [string]
+        $Name,
+        [string]
+        $DestinationZip,
+        [bool]
+        $Logging,
+        [string]
+        $GitPath
     )
     
     try
@@ -39,18 +41,18 @@
 
     if (Test-Path $RepoPath)
     {
-        if (IsValidRepo -RepoPath $RepoPath)
+        if (IsValidRepo -RepoPath $RepoPath -GitPath $GitPath)
         {
             Set-Location $RepoPath
             $ensureResult = "Present"
             
             # Retreive current branch and clean-up git output
-            $currentBranch = (ExecGit "rev-parse --abbrev-ref HEAD").split()[0]
+            $currentBranch = (ExecGit -GitPath $GitPath -args "rev-parse --abbrev-ref HEAD").split()[0]
             Write-Verbose "Repo branch set to `"$currentBranch`""
 
             # Retrieve current repo origin fetch settings
             # Split output by line; find one that is listed as (fetch); split by space and list just origin URI
-            $SourceResult = (((ExecGit -args "remote -v").Split("`n") | Where-Object { $_.contains("(fetch)") }) -split "\s+")[1]
+            $SourceResult = (((ExecGit -GitPath $GitPath -args "remote -v").Split("`n") | Where-Object { $_.contains("(fetch)") }) -split "\s+")[1]
 
             if (-not ([String]::IsNullOrEmpty($DestinationZip)))
             {
@@ -129,7 +131,9 @@ function Set-TargetResource
         [string]
         $DestinationZip,
         [bool]
-        $Logging
+        $Logging,
+        [string]
+        $GitPath
     )
     try
     {
@@ -142,44 +146,10 @@ function Set-TargetResource
     
     if ($Ensure -eq "Present")
     {
-        <# Disabling Browser service - need to check if this is needed
-        if ((Get-Service "Browser").status -eq "Stopped" ) 
-        {
-            Get-Job | ? State -match "Completed" | Remove-Job
-            $startmode = (Get-WmiObject -Query "Select StartMode From Win32_Service Where Name='browser'").startmode
-
-            if ( $startmode -eq 'disabled' )
-            {
-                Set-Service -Name Browser -StartupType Manual 
-            }
-
-            Write-Verbose "Starting Browser Service"
-            if($Logging -eq $true) 
-            {
-                Write-EventLog -LogName DevOps -Source $myLogSource -EntryType Information -EventId 1000 -Message ("Starting Browser Service")
-            }
-            Start-Service Browser
- 
-            if ( (Get-Job "Stop_Browser" -ErrorAction SilentlyContinue).count -eq 0 )
-            {
-                Write-Verbose "Creating PSJob to Stop Browser Service"
-                if($Logging -eq $true) 
-                {
-                    Write-EventLog -LogName DevOps -Source $myLogSource -EntryType Information -EventId 1000 -Message ("Creating PSJob to Stop Browser Service")
-                }
-                Start-Job -Name "Stop_Browser" -ScriptBlock 
-                {
-                    Start-Sleep -Seconds 60
-                    Stop-Service Browser
-                }
-            }
-        }
-        #>
-        
-        $GetResult = (Get-TargetResource -Ensure $Ensure -Source $Source -Destination $Destination -Branch $Branch -Name $Name)
+        $GetResult = (Get-TargetResource -Ensure $Ensure -Source $Source -Destination $Destination -Branch $Branch -Name $Name -GitPath $GitPath)
         
         # Retrieve any changes, which have not been merged locally
-        $Fetch = ExecGit "fetch origin"
+        $Fetch = ExecGit -GitPath $GitPath -args "fetch origin"
 
         # Check repository is already configured as per desired configuration
         if (($GetResult.Ensure -ne "Present") -or 
@@ -197,7 +167,7 @@ function Set-TargetResource
                 Remove-Item -Path $RepoPath -Recurse -Force
             }
 
-            $GitOutput = (ExecGit "clone --branch $branch $Source")
+            $GitOutput = (ExecGit -GitPath $GitPath -args "clone --branch $branch $Source")
             if($Logging) 
             {
                 Write-EventLog -LogName DevOps -Source $myLogSource -EntryType Information -EventId 1000 -Message ("Repo: $Name`ngit clone --branch $branch $Source `n$GitOutput") 
@@ -212,7 +182,7 @@ function Set-TargetResource
             if ($GetResult.Branch -ne $Branch)
             {
                 Write-Verbose "Local branch is not valid - setting to `"$Branch`""
-                $GitOutput = (ExecGit "checkout --force $Branch")
+                $GitOutput = (ExecGit -GitPath $GitPath -args "checkout --force $Branch")
                 if($Logging) 
                 {
                     Write-EventLog -LogName DevOps -Source $myLogSource -EntryType Information -EventId 1000 -Message ("Repo: $Name`nLocal branch is not valid - setting to `"$Branch`" `ngit checkout --force $Branch `n$GitOutput") 
@@ -220,15 +190,15 @@ function Set-TargetResource
                 Write-Verbose "`ngit checkout --force $Branch `n$GitOutput"
             }
 
-            $RepoStatus = ExecGit "status"
+            $RepoStatus = ExecGit -GitPath $GitPath -args "status"
 
             if ($Mode -eq "Clone")
             {
                 if (($localCommit -ne $originCommit) -or (-not $RepoStatus.Contains("branch is up-to-date")))
                 {
                     # merge remote changes if local is behind origin seems to not work very well during provisioning - need to investigate further
-                    $GitOutput = ExecGit "merge remotes/origin/$Branch"
-                    $RepoStatus = ExecGit "status"
+                    $GitOutput = ExecGit -GitPath $GitPath -args "merge remotes/origin/$Branch"
+                    $RepoStatus = ExecGit -GitPath $GitPath -args "status"
 
                     if($Logging) 
                     {
@@ -253,8 +223,8 @@ function Set-TargetResource
                     ($RepoStatus.Contains("Changes to be committed")))
                 {
                     # Reset local repo to match origin for all tracked files
-                    $GitOutput = ExecGit "reset --hard origin/$branch"
-                    $RepoStatus = ExecGit "status"
+                    $GitOutput = ExecGit -GitPath $GitPath -args "reset --hard origin/$branch"
+                    $RepoStatus = ExecGit -GitPath $GitPath -args "status"
 
                     if($Logging) 
                     {
@@ -267,8 +237,8 @@ function Set-TargetResource
                 if (-not ($RepoStatus.Contains("working directory clean")))
                 {
                     # Remove any untracked files (-f [force], directories (-d) and any ignored files (-x)
-                    $GitOutput = ExecGit "clean -xdf"
-                    $RepoStatus = ExecGit "status"
+                    $GitOutput = ExecGit -GitPath $GitPath -args "clean -xdf"
+                    $RepoStatus = ExecGit -GitPath $GitPath -args "status"
 
                     if($Logging) 
                     {
@@ -367,7 +337,9 @@ function Test-TargetResource
         [string]
         $DestinationZip,
         [bool]
-        $Logging
+        $Logging,
+        [string]
+        $GitPath
     )
 
     try
@@ -379,7 +351,7 @@ function Test-TargetResource
 
     $RepoPath = (SetRepoPath -Source $Source -Destination $Destination)
 
-    $GetResult = (Get-TargetResource -Ensure $Ensure -Source $Source -Destination $Destination -Branch $Branch -Name $Name)
+    $GetResult = (Get-TargetResource -Ensure $Ensure -Source $Source -Destination $Destination -Branch $Branch -Name $Name -GitPath $GitPath)
 
     if ($Ensure -eq "Present")
     {
@@ -391,7 +363,7 @@ function Test-TargetResource
                 if ($Mode -eq "Clone")
                 {
                     # Check if origin contains changes which have not been merged locally
-                    $Fetch = ExecGit "fetch origin"
+                    $Fetch = ExecGit -GitPath $GitPath -args "fetch origin"
                     if ($Fetch.Length -ne 0)
                     {
                         Write-Verbose "origin/$Branch has pending updates:`n$Fetch"
@@ -403,8 +375,8 @@ function Test-TargetResource
                     }
                     
                     # Ensure that local and remote commits match after a fetch operation has been made
-                    $localCommit = ExecGit "rev-parse HEAD"
-                    $originCommit = ExecGit "rev-parse origin/$Branch"
+                    $localCommit = ExecGit -GitPath $GitPath -args "rev-parse HEAD"
+                    $originCommit = ExecGit -GitPath $GitPath -args "rev-parse origin/$Branch"
 
                     if (-not ($localCommit -eq $originCommit))
                     {
@@ -420,7 +392,7 @@ function Test-TargetResource
                     
                     # Check for local repo status for local uncommited changes
                     # TODO: for push mode we will need tests for local commits, which have not been pushed yet
-                    $RepoStatus = ExecGit "status"
+                    $RepoStatus = ExecGit -GitPath $GitPath -args "status"
                     if (-not ($RepoStatus.Contains("working directory clean")))
                     {
                         Write-Verbose "Local repo contains uncommited changes! `n$RepoStatus"
@@ -549,19 +521,26 @@ Function New-ResourceZip
 function ExecGit
 {
 	param(
-		[Parameter(Mandatory = $true)][string]$args
+		[string]$GitPath,
+        [Parameter(Mandatory = $true)][string]$args
 	)
 
-    # Conifugraiton and DSC resource-wide variables
-    . ($MyInvocation.PSScriptRoot + "\RS_rsGit_settings.ps1")
-    $gitCmd = $global:gitExe
-    #$gitCmd = "C:\Program Files (x86)\Git\cmd\git.exe"
+    if (-not $GitPath)
+    {
+        $GitPath = (Get-Command git.exe).Path
+    }
+
+    if (-not (Test-Path $GitPath))
+    {
+        Throw "Git executable not found at $GitPath"
+    }
+
     $location = Get-Location
 
     try
     {
         #Check if location specified for git executable is valid
-	    if ((Get-Command $gitCmd).Name -eq "git.exe")
+	    if ((Get-Command $GitPath).Name -eq "git.exe")
 	    {
 	    	# Write-Verbose "Executing: git $args in $($location.path)"
 	        # Capture git output
@@ -570,7 +549,7 @@ function ExecGit
 	        $psi.UseShellExecute = $false 
 	        $psi.RedirectStandardOutput = $true 
 	        $psi.RedirectStandardError = $true 
-	        $psi.FileName = $gitCmd
+	        $psi.FileName = $GitPath
             $psi.WorkingDirectory = $location.ToString()
 	        $psi.Arguments = $args
 	        $process = New-Object System.Diagnostics.Process 
@@ -583,13 +562,13 @@ function ExecGit
 	    }
 	    else
 	    {
-            Write-EventLog -LogName DevOps -Source $myLogSource -EntryType Error -EventId 1000 -Message ("Git executable not found at $gitCmd")
-            Throw "Git executable not found at $gitCmd"
+            Write-Verbose "Git executable not found at $GitPath"
+            Throw "Git executable not found at $GitPath"
 	    }
     }
     catch
     {
-        Write-EventLog -LogName DevOps -Source $myLogSource -EntryType Error -EventId 1000 -Message ("Git client execution failed with the following error:`n $($Error[0].Exception)")
+        Write-Verbose "Git client execution failed with the following error:`n $($Error[0].Exception)"
         return $($Error[0].Exception)
     }
 }
@@ -601,16 +580,7 @@ function SetRepoPath
         [Parameter(Position=1,Mandatory = $true)][string]$Destination
     )
 
-    if(($Source.split("/.")[0]) -eq "https:")
-    {
-        $i = 5
-    }
-    else
-    {
-        $i = 2
-    }
-
-    $RepoPath = Join-Path $Destination -ChildPath ($Source.split("/."))[$i]
+    $RepoPath = Join-Path $Destination -ChildPath ($Source -replace "\.git$").Split("/")[-1]
     
     return $RepoPath
 }
@@ -618,13 +588,14 @@ function SetRepoPath
 function IsValidRepo
 {
     param(
-		[Parameter(Position=0,Mandatory = $true)][string]$RepoPath
+		[string]$GitPath,
+        [Parameter(Mandatory = $true)][string]$RepoPath
 	)
 
     if (Test-Path $RepoPath)
     {
         Set-Location $RepoPath
-        $output = (ExecGit -args "status")
+        $output = (ExecGit -GitPath $GitPath -args "status")
         if ($output -notcontains "Not a git repository")
         {
             return $true
