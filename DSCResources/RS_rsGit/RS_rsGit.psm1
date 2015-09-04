@@ -61,17 +61,8 @@ function SetRepoPath
         [Parameter(Position=1,Mandatory = $true)][string]$Destination
     )
 
-    if(($Source.split("/.")[0]) -eq "https:")
-    {
-        $i = 5
-    }
-    else
-    {
-        $i = 2
-    }
+    $RepoPath = Join-Path $Destination -ChildPath ($Source -replace "\.git$").Split("/")[-1]
 
-    $RepoPath = Join-Path $Destination -ChildPath ($Source.split("/."))[$i]
-    
     return $RepoPath
 }
 
