@@ -9,15 +9,20 @@
     {
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine")
         $GitPath = (Get-Command git.exe -ErrorAction SilentlyContinue).Path
+        if (-not $GitPath)
+        {
+            Throw "Git executable was not found - make sure that git client is installed correctly and present in `$env:path"
+        }
     }
-
-    if (-not (Test-Path $GitPath))
+    else
     {
-        Throw "Git executable not found at $GitPath"
+        if (-not (Test-Path $GitPath))
+        {
+            Throw "Git executable not found at $GitPath - make sure that provided path is correct or git client is installed"
+        }
     }
 
     $location = Get-Location
-
     try
     {
         #Check if location specified for git executable is valid
