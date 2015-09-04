@@ -28,7 +28,7 @@ Function Test-TargetResource {
                 $moduleName = $($module, '_', $(((Get-Content -Path $((Join-Path $modulePath -ChildPath $module), $($module, ".psd1" -join '') -join '\')) -match "ModuleVersion") -replace 'ModuleVersion', '' -replace ' ', '' -replace '=', '' -replace "'", '' -replace '"', '').Trim() -join '')
                 if(Test-Path -Verbose -Path $(Join-Path $destination -ChildPath $($moduleName, '.zip' -join ''))) {
                     if($((Get-FileHash -Path $(Join-Path $destination -ChildPath $($moduleName, '.zip' -join '')) -ErrorAction SilentlyContinue).Hash) -eq $(Get-Content -Path $(Join-Path $destination -ChildPath $($moduleName, '.zip.checksum' -join '')) -ErrorAction SilentlyContinue)) {
-                        $testResult = $true
+                        #$testResult = $true
                     }
                     else {
                         $testResult = $false
@@ -65,7 +65,7 @@ Function Set-TargetResource {
             }
         }
     }
-    New-DSCCheckSum -ConfigurationPath 'C:\Program Files\WindowsPowerShell\DscService\Modules' -Force
+    New-DSCCheckSum -ConfigurationPath $destination -Force
 }
 Function New-ResourceZip
 {
