@@ -27,10 +27,8 @@ Function Test-TargetResource {
             if(Test-Path -Path $((Join-Path $modulePath -ChildPath $module), '\', $($module, '.psd1' -join '') -join '')) {
                 $moduleName = $($module, '_', $(((Get-Content -Path $((Join-Path $modulePath -ChildPath $module), $($module, ".psd1" -join '') -join '\')) -match "ModuleVersion") -replace 'ModuleVersion', '' -replace ' ', '' -replace '=', '' -replace "'", '' -replace '"', '').Trim() -join '')
                 if(Test-Path -Verbose -Path $(Join-Path $destination -ChildPath $($moduleName, '.zip' -join ''))) {
-                    if($((Get-FileHash -Path $(Join-Path $destination -ChildPath $($moduleName, '.zip' -join '')) -ErrorAction SilentlyContinue).Hash) -eq $(Get-Content -Path $(Join-Path $destination -ChildPath $($moduleName, '.zip.checksum' -join '')) -ErrorAction SilentlyContinue)) {
-                        #$testResult = $true
-                    }
-                    else {
+                    if(-not($((Get-FileHash -Path $(Join-Path $destination -ChildPath $($moduleName, '.zip' -join '')) -ErrorAction SilentlyContinue).Hash) -eq $(Get-Content -Path $(Join-Path $destination -ChildPath $($moduleName, '.zip.checksum' -join '')) -ErrorAction SilentlyContinue))) {
+                        Write-Verbose "Checksum checks failed for: $module"
                         $testResult = $false
                     }
                 }
